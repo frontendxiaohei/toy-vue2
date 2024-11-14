@@ -29,6 +29,7 @@ class Observer {
 }
 
 export function defineReactive(obj, key, value) {
+    // key 对应 的 value 可能是对象
     observe(value);
     Object.defineProperty(obj, key, {
         get() {
@@ -36,6 +37,7 @@ export function defineReactive(obj, key, value) {
         },
         set(newValue) {
             if (newValue === value) return;
+            // 如果用户设置的是一个对象，应该将其进行劫持
             observe(newValue);
             value = newValue;
         }
