@@ -1,3 +1,4 @@
+import { compileToFunction } from "./compiler";
 import { initState } from "./state";
 import { isElement, isString } from "./utils";
 
@@ -8,29 +9,32 @@ export function initMixin(Vue) {
 
         // 状态初始化
         initState(vm);
+        let el = options.el;
 
-        if ($options.el) {
-            vm.$mount(vm.$options.el);
+        if (el) {
+            vm.$mount(el);
         }
     }
 
     Vue.prototype.$mount = function (el) {
         const vm = this;
-        const options = vm.$options;
-        if (isString(el)) {
-            el = document.querySelector(el);
-        } else if (isElement(el)) {
-            el = el;
-        } else {
-            throw new Error('el 必须是一个字符串或者一个元素');
+        el = document.querySelector(el);
+        let opts = vm.$options
+        if (!opts.render) { 
+            let template; 
+            if (!opts.template && el) { 
+                template = el.outerHTML
+            } else {
+                if (el) {
+                    template = opts.template 
+                }
+            }
+            if (template && el) {
+                const render = compileToFunction(template);
+                opts.render = render;
+            }
         }
-        vm.$el = el;
-
-        // 有render 就用render 没有就用template
-        if (!options.render) {
-            // 渲染
-        } else {
-            // 模板编译
-        }
+        console.log(opts.render);
+        
     }
 }

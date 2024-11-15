@@ -4,6 +4,190 @@
     (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.TVue = factory());
 })(this, (function () { 'use strict';
 
+    const ncname = `[a-zA-Z_][\\-\\.0-9_a-zA-Z]*`;
+    const qnameCapture = `((?:${ncname}\\:)?${ncname})`;
+    const startTagOpen = new RegExp(`^<${qnameCapture}`);
+    const endTag = new RegExp(`^<\\/${qnameCapture}[^>]*>`);
+    const attribute = /^\s*([^\s"'<>\/=]+)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/;
+    const startTagClose = /^\s*(\/?)>/;
+
+    /**
+     * 把模板转换为AST树
+     * @param {*} html 
+     * @returns 
+     */
+    function parseHTML(html) {
+      const ELEMENT_TYPE = 1;
+      const TEXT_TYPE = 3;
+      const stack = [];
+      let currentParent;
+      let root;
+
+      // 生成AST节点
+      function createASTElement(tag, attrs) {
+        return {
+          tag,
+          type: ELEMENT_TYPE,
+          children: [],
+          attrs,
+          parent: null
+        };
+      }
+
+      // 开始标签
+      function start(tag, attrs) {
+        let node = createASTElement(tag, attrs);
+        if (!root) {
+          root = node;
+        }
+        if (currentParent) {
+          node.parent = currentParent;
+          currentParent.children.push(node);
+        }
+        stack.push(node);
+        currentParent = node;
+      }
+      // 文本
+      function chars(text) {
+        text = text.replace(/\s/g, ' ');
+        text && currentParent.children.push({
+          type: TEXT_TYPE,
+          text,
+          parent: currentParent
+        });
+      }
+      // 结束标签
+      function end(tag) {
+        stack.pop();
+        currentParent = stack[stack.length - 1];
+      }
+      // 截取html
+      function advance(n) {
+        html = html.substring(n);
+      }
+      // 解析开始标签
+      function parseStartTag() {
+        const start = html.match(startTagOpen);
+        if (start) {
+          const match = {
+            tagName: start[1],
+            attrs: []
+          };
+          advance(start[0].length);
+          let attr, end;
+          while (!(end = html.match(startTagClose)) && (attr = html.match(attribute))) {
+            advance(attr[0].length);
+            match.attrs.push({
+              name: attr[1],
+              value: attr[3] || attr[4] || attr[5] || true
+            });
+          }
+          if (end) {
+            advance(end[0].length);
+          }
+          return match;
+        }
+        return false;
+      }
+      while (html) {
+        let textEnd = html.indexOf('<');
+        if (textEnd == 0) {
+          const startTagMatch = parseStartTag();
+          if (startTagMatch) {
+            start(startTagMatch.tagName, startTagMatch.attrs);
+            continue;
+          }
+          let endTagMatch = html.match(endTag);
+          if (endTagMatch) {
+            advance(endTagMatch[0].length);
+            end(endTagMatch[1]);
+            continue;
+          }
+        }
+        if (textEnd > 0) {
+          let text = html.substring(0, textEnd);
+          if (text) {
+            chars(text);
+            advance(text.length);
+          }
+        }
+      }
+      return root;
+    }
+
+    /**
+     * 
+     * _c 创建元素
+     * _v 创建文本 
+     * _s 拼接文本
+     * 
+     */
+
+    // 生成属性字符串
+    function genProps(attrs) {
+      let str = '';
+      for (let i = 0; i < attrs.length; i++) {
+        let attr = attrs[i];
+        if (attr.name === 'style') {
+          let obj = {};
+          attr.value.split(';').forEach(item => {
+            let [key, value] = item.split(':');
+            obj[key] = value;
+          });
+          attr.value = obj;
+        }
+        str += `${attr.name}:${JSON.stringify(attr.value)},`;
+      }
+      return `{${str.slice(0, -1)}}`;
+    }
+
+    // 小胡子正则
+    const defaultTagRE = /\{\{((?:.|\r?\n)+?)\}\}/g;
+
+    // 生成代码
+    function gen(node) {
+      if (node.type === 1) {
+        return codegen(node);
+      } else {
+        let text = node.text;
+        if (!defaultTagRE.test(text)) {
+          return `_v(${JSON.stringify(text)})`;
+        } else {
+          let tokens = [];
+          let match;
+          defaultTagRE.lastIndex = 0;
+          let lastIndex = 0;
+          while (match = defaultTagRE.exec(text)) {
+            let index = match.index;
+            if (index > lastIndex) {
+              tokens.push(JSON.stringify(text.slice(lastIndex, index)));
+            }
+            tokens.push(`_s(${match[1].trim()})`);
+            lastIndex = index + match[0].length;
+          }
+          if (lastIndex < text.length) {
+            tokens.push(JSON.stringify(text.slice(lastIndex)));
+          }
+          return `_v(${tokens.join('+')})`;
+        }
+      }
+    }
+    function genChildren(children) {
+      return children.map(child => gen(child)).join(',');
+    }
+    function codegen(ast) {
+      let children = genChildren(ast.children);
+      let code = `_c('${ast.tag}',${ast.attrs.length > 0 ? genProps(ast.attrs) : 'null'}${ast.children.length ? `,${children}` : ''})`;
+      return code;
+    }
+    function compileToFunction(template) {
+      let ast = parseHTML(template);
+      let code = codegen(ast);
+      code = `with(this){return ${code}}`;
+      let render = new Function(code);
+      return render;
+    }
+
     function isObject(val) {
       return val !== null && typeof val === 'object';
     }
@@ -60,6 +244,7 @@
       }
     }
     function defineReactive(obj, key, value) {
+      // key 对应 的 value 可能是对象
       observe(value);
       Object.defineProperty(obj, key, {
         get() {
@@ -67,6 +252,7 @@
         },
         set(newValue) {
           if (newValue === value) return;
+          // 如果用户设置的是一个对象，应该将其进行劫持
           observe(newValue);
           value = newValue;
         }
@@ -116,7 +302,33 @@
       Vue.prototype._init = function (options) {
         const vm = this;
         vm.$options = options;
+
+        // 状态初始化
         initState(vm);
+        let el = options.el;
+        if (el) {
+          vm.$mount(el);
+        }
+      };
+      Vue.prototype.$mount = function (el) {
+        const vm = this;
+        el = document.querySelector(el);
+        let opts = vm.$options;
+        if (!opts.render) {
+          let template;
+          if (!opts.template && el) {
+            template = el.outerHTML;
+          } else {
+            if (el) {
+              template = opts.template;
+            }
+          }
+          if (template && el) {
+            const render = compileToFunction(template);
+            opts.render = render;
+          }
+        }
+        console.log(opts.render);
       };
     }
 

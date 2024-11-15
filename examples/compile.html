@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模板编译</title>
+</head>
+<body>
+    <div id="app">
+
+        <div>{{msg}}</div>
+        <div>{{obj.a}}</div>
+        <div>{{obj.b}}</div>
+        <div>{{obj.c}}</div>
+
+        <p>
+            <span>{{arr[1]}}</span>
+        </p>
+    </div>
+    <script src="../dist/toy-vue.js"></script>
+    <script>
+        // console.log(TVue);
+
+        const vm = new TVue({
+            el: '#app',
+            data: {
+                msg: 'hello world',
+                count: 0,
+                arr: [1, 2, 3, 4, 5],
+                obj: {
+                    a: 1,
+                    b: 2,
+                    c: 3
+                }
+            },
+            methods: {
+                add() {
+                    this.count++;
+                }
+            }
+        })
+
+        console.log(vm);
+        
+    </script>
+</body>
+</html>
