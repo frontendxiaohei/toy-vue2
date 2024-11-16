@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模板编译</title>
+</head>
+<body>
+    <div id="app">
+
+        <div>{{msg}}</div>
+        <div>{{obj.a}}</div>
+        <div>{{obj.b}}</div>
+        <div>{{obj.c}}</div>
+
+        <p>
+            <span>{{arr[1]}}</span>
+        </p>
+    </div>
+    <script src="../dist/toy-vue.js"></script>
+    <script>
+        // console.log(TVue);
+
+        const vm = new TVue({
+            data: {
+                msg: 'hello world',
+                count: 0,
+                arr: [1, 2, 3, 4, 5],
+                obj: {
+                    a: 1,
+                    b: 2,
+                    c: 3
+                }
+            },
+            methods: {
+                add() {
+                    this.count++;
+                }
+            }
+        })
+
+        vm.$mount('#app');
+
+        // 属性和我们的视图关联起来 做到数据变化可以自动更新视图 （观察者模式）
+        setTimeout(() => {
+            vm.msg = 'rust';
+            vm._update(vm._render()); // 重新根据数据渲染出一个虚拟dom
+        }, 1000)
+        
+    </script>
+</body>
+</html>
