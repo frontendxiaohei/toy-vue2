@@ -11,6 +11,7 @@ options有 el,render,template, 最终转换为一个render方法,
 简单版本,还有实现diff算法
  
 
+# 实现响应式
 
 
 
